@@ -1,0 +1,7 @@
+{$CADDY_HOST:localhost} {
+    @api path /api/*
+    reverse_proxy @api todoapp:5050
+
+    root * /web/public
+    file_server
+}

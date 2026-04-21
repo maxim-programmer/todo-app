@@ -1,0 +1,66 @@
+package adapters_in_transport_http
+
+import (
+	"net/http"
+
+	"github.com/google/uuid"
+	core_logger "github.com/nilchan-social/golang-todoapp/internal/core/logger"
+	core_http_request "github.com/nilchan-social/golang-todoapp/internal/core/transport/http/request"
+	core_http_response "github.com/nilchan-social/golang-todoapp/internal/core/transport/http/response"
+	ports_in "github.com/nilchan-social/golang-todoapp/internal/features/tasks/ports/in"
+)
+
+type CreateTaskRequest struct {
+	Title        string    `json:"title" validate:"required,min=1,max=100"         example:"Домашнее задание"`
+	Description  *string   `json:"description" validate:"omitempty,min=1,max=1000" example:"Сделать до четверга домашнее задание по математике"`
+	AuthorUserID uuid.UUID `json:"author_user_id" validate:"required"              example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+type CreateTaskResponse TaskDTOResponse
+
+// CreateTask    godoc
+// @Summary      Создать задачу
+// @Description  Создать новую задачу в системе
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        request  body      CreateTaskRequest   true  "CreateTask тело запроса"
+// @Success      201      {object}  CreateTaskResponse  "Успешно созданная задача"
+// @Failure      400      {object}  core_http_response.ErrorResponse "Bad request"
+// @Failure      404      {object} 	core_http_response.ErrorResponse "Author not found"
+// @Failure      500      {object}  core_http_response.ErrorResponse "Internal server error"
+// @Router       /tasks [post]
+func (h *TasksHTTPHandler) CreateTask(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	responseHandler := core_http_response.NewHTTPResponseHandler(log, rw)
+
+	var request CreateTaskRequest
+	if err := core_http_request.DecodeAndValidateRequest(r, &request); err != nil {
+		responseHandler.ErrorResponse(
+			err,
+			"failed to decode and validate HTTP request",
+		)
+
+		return
+	}
+
+	serviceParams := ports_in.NewCreateTaskParams(
+		request.Title,
+		request.Description,
+		request.AuthorUserID,
+	)
+	serviceResult, err := h.tasksService.CreateTask(ctx, serviceParams)
+	if err != nil {
+		responseHandler.ErrorResponse(
+			err,
+			"failed to create task",
+		)
+
+		return
+	}
+
+	response := CreateTaskResponse(taskDTOFromDomain(serviceResult.Task))
+
+	responseHandler.JSONResponse(response, http.StatusCreated)
+}
